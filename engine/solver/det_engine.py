@@ -142,6 +142,25 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
         outputs = model(samples)
+        '''
+        outputs["aux_outputs"] = []
+        outputs["enc_aux_outputs"] = []
+        outputs["enc_meta"] = {"class_agnostic": False}
+        
+        # Normalize targets for loss calculation only (keep original for COCO eval)
+        normalized_targets = [
+            {**t, 'boxes': t['boxes'] / t['orig_size'].repeat(2).to(t['boxes'].device)}
+            for t in targets
+        ]
+        
+        # Compute validation losses with normalized targets
+        loss_dict = criterion(outputs, normalized_targets)
+        loss_dict_reduced = dist_utils.reduce_dict(loss_dict)
+        loss_value = sum(loss_dict_reduced.values())
+        
+        # Update metric logger with losses
+        metric_logger.update(loss=loss_value, **loss_dict_reduced)
+        '''
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
 
@@ -167,7 +186,10 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessor, 
         coco_evaluator.summarize()
 
     stats = {}
-    # stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    # Get validation losses from metric logger
+    # val_losses = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    # stats.update(val_losses)
+    
     if coco_evaluator is not None:
         if 'bbox' in iou_types:
             stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()

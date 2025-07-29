@@ -59,7 +59,10 @@ class SmoothedValue(object):
 
     @property
     def global_avg(self):
-        return self.total / self.count
+        try:
+            return self.total / self.count
+        except ZeroDivisionError:
+            return 0
 
     @property
     def max(self):
